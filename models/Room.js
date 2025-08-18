@@ -82,8 +82,7 @@ const roomSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Indexes for better query performance
-roomSchema.index({ roomNumber: 1 });
+// Indexes for better query performance (roomNumber already has unique index)
 roomSchema.index({ status: 1 });
 roomSchema.index({ type: 1 });
 roomSchema.index({ floor: 1, block: 1 });

@@ -6,6 +6,7 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 import dotenv from 'dotenv';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 // Stripe removed for now
 
@@ -129,7 +130,20 @@ app.get('/api/health', (req, res) => {
   res.status(200).json({ 
     status: 'success', 
     message: 'Campus Stay Suite API is running',
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    corsOrigins: allowedOrigins,
+    requestOrigin: req.headers.origin || 'no-origin'
+  });
+});
+
+// CORS test endpoint
+app.get('/api/cors-test', (req, res) => {
+  res.status(200).json({
+    status: 'success',
+    message: 'CORS test endpoint',
+    origin: req.headers.origin,
+    allowedOrigins: allowedOrigins,
+    headers: req.headers
   });
 });
 
@@ -140,13 +154,25 @@ app.use('/api/bookings', authMiddleware, bookingRoutes);
 // Payments routes removed
 app.use('/api/users', authMiddleware, userRoutes);
 
-// Serve static files in production
+// Serve static files in production only if dist folder exists
 if (process.env.NODE_ENV === 'production') {
-  app.use(express.static(path.join(__dirname, '../dist')));
+  const distPath = path.join(__dirname, '../dist');
   
-  app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, '../dist/index.html'));
-  });
+  // Check if dist folder exists (for monorepo deployments)
+  try {
+    if (fs.existsSync(distPath)) {
+      app.use(express.static(distPath));
+      
+      app.get('*', (req, res) => {
+        res.sendFile(path.join(distPath, 'index.html'));
+      });
+      console.log('📁 Serving static files from:', distPath);
+    } else {
+      console.log('📁 No dist folder found - frontend deployed separately');
+    }
+  } catch (error) {
+    console.log('📁 Static file serving disabled - frontend deployed separately');
+  }
 }
 
 // Error handling middleware
