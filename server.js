@@ -34,17 +34,71 @@ const PORT = process.env.PORT || 5000;
 // Stripe init removed
 
 // CORS configuration (must be before any other middleware)
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://localhost:5173',
+  'https://nfsu-frontend.vercel.app',
+  'https://yourdomain.com'
+];
+
+// Add custom origins from environment variable
+if (process.env.ALLOWED_ORIGINS) {
+  const customOrigins = process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim());
+  allowedOrigins.push(...customOrigins);
+}
+
+console.log('🌐 Allowed CORS Origins:', allowedOrigins);
+
 const corsOptions = {
-  origin: process.env.NODE_ENV === 'production' 
-    ? ['https://yourdomain.com'] 
-    : ['http://localhost:3000', 'http://localhost:5173'],
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      console.log('❌ CORS blocked request from origin:', origin);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
   methods: ['GET','HEAD','PUT','PATCH','POST','DELETE','OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
+  preflightContinue: false,
+  optionsSuccessStatus: 204
 };
 app.use(cors(corsOptions));
+
+// Debug middleware to log CORS requests
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (origin) {
+    console.log(`🔍 Request from origin: ${origin}, Method: ${req.method}, Path: ${req.path}`);
+  }
+  next();
+});
+
 // Explicitly handle preflight
 app.options('*', cors(corsOptions));
+
+// Manual CORS middleware as fallback
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  
+  if (origin && allowedOrigins.includes(origin)) {
+    res.header('Access-Control-Allow-Origin', origin);
+    res.header('Access-Control-Allow-Credentials', 'true');
+    res.header('Access-Control-Allow-Methods', 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With,Accept,Origin');
+  }
+  
+  if (req.method === 'OPTIONS') {
+    res.status(204).end();
+    return;
+  }
+  
+  next();
+});
 
 // Security middleware
 app.use(helmet());
@@ -110,9 +164,8 @@ app.use('*', (req, res) => {
 const server = http.createServer(app);
 initSocket(server, {
   cors: {
-    origin: process.env.NODE_ENV === 'production' 
-      ? ['https://yourdomain.com'] 
-      : ['http://localhost:3000', 'http://localhost:5173'],
+    origin: allowedOrigins,
+    methods: ["GET", "POST"],
     credentials: true
   }
 });
